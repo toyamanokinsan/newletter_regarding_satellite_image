@@ -1,0 +1,39 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "file:/data/dev.db"
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      NEWS_API_KEY: "${NEWS_API_KEY}"
+      CRON_SECRET: "${CRON_SECRET:-}"
+      NODE_ENV: "production"
+    volumes:
+      - db_data:/data
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/papers?page=1&pageSize=1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  collector:
+    image: alpine:3.18
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      NOTIFY_AT: "${NOTIFY_AT:-07:00}"
+      APP_URL: "http://app:3000"
+      CRON_SECRET: "${CRON_SECRET:-}"
+    volumes:
+      - ./docker/cron.sh:/cron.sh:ro
+    command: sh -c "apk add --no-cache curl tzdata && sh /cron.sh"
+    restart: always
+
+volumes:
+  db_data:

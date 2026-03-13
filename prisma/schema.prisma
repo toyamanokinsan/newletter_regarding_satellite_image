@@ -1,0 +1,79 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Paper {
+  id                   String   @id // arXiv ID
+  title                String
+  abstract             String
+  authors              String // JSON array
+  publishedAt          DateTime
+  pdfUrl               String
+  category             String // ObjectDetection / Segmentation / ChangeDetection / SuperResolution / FoundationModel
+  topic                String   @default("satellite") // satellite / vision / productivity
+  summaryJson          String? // GPT-4o generated 5-item JSON
+  recommendationReason String? // AI-generated recommendation reason
+  score                Float    @default(0)
+  lat                  Float? // extracted from place names
+  lng                  Float?
+  bookmarked           Boolean  @default(false)
+  rating               Int      @default(0) // +1 / -1 / 0
+  isFallback           Boolean  @default(false) // true if from fallback search
+  createdAt            DateTime @default(now())
+}
+
+model NewsArticle {
+  id                   String   @id // URL hash
+  title                String
+  content              String
+  source               String
+  url                  String   @unique
+  publishedAt          DateTime
+  category             String
+  topic                String   @default("satellite") // satellite / vision / productivity
+  summaryText          String? // legacy: plain text summary
+  summaryJson          String? // structured JSON summary (NewsSummary)
+  recommendationReason String? // AI-generated recommendation reason
+  score                Float    @default(0)
+  lat                  Float?
+  lng                  Float?
+  bookmarked           Boolean  @default(false)
+  rating               Int      @default(0) // +1 / -1 / 0
+  isFallback           Boolean  @default(false) // true if from fallback search
+  createdAt            DateTime @default(now())
+}
+
+model Rating {
+  id        String   @id @default(cuid())
+  itemId    String
+  itemType  String // "paper" | "news"
+  value     Int // +1 or -1
+  category  String
+  createdAt DateTime @default(now())
+
+  @@unique([itemId, itemType])
+}
+
+model CategoryWeight {
+  category   String   @id
+  adjustment Float    @default(0) // -0.3 ~ +0.3
+  upCount    Int      @default(0)
+  downCount  Int      @default(0)
+  updatedAt  DateTime @updatedAt
+}
+
+model UserPreferences {
+  id         String @id @default("default")
+  persona    String @default("general") // sar / urban / agriculture / environment / defense / general
+  categories String @default("[]") // JSON array of preferred categories
+  notifyAt   String @default("07:00")
+}

@@ -1,0 +1,16 @@
+{
+  "name": "衛星AI News",
+  "short_name": "衛星AI",
+  "description": "衛星画像解析AI分野の最新論文・ニュースを毎朝配信",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    }
+  ]
+}
