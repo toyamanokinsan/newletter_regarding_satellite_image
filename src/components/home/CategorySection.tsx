@@ -16,6 +16,10 @@ interface CategorySectionProps {
   news: NewsArticle[];
   onRatePaper: (id: string, value: number) => void;
   onRateNews: (id: string, value: number) => void;
+  onBookmarkPaper: (id: string, bookmarked: boolean) => void;
+  onBookmarkNews: (id: string, bookmarked: boolean) => void;
+  onMemoPaper?: (id: string, memo: string) => void;
+  onMemoNews?: (id: string, memo: string) => void;
 }
 
 export function CategorySection({
@@ -24,6 +28,10 @@ export function CategorySection({
   news,
   onRatePaper,
   onRateNews,
+  onBookmarkPaper,
+  onBookmarkNews,
+  onMemoPaper,
+  onMemoNews,
 }: CategorySectionProps) {
   const config = TOPIC_CONFIG[topic];
   const isEmpty = papers.length === 0 && news.length === 0;
@@ -62,6 +70,8 @@ export function CategorySection({
                     item={paper}
                     type="paper"
                     onRate={onRatePaper}
+                    onBookmark={onBookmarkPaper}
+                    onMemo={onMemoPaper}
                   />
                 ))}
               </div>
@@ -81,6 +91,8 @@ export function CategorySection({
                     item={article}
                     type="news"
                     onRate={onRateNews}
+                    onBookmark={onBookmarkNews}
+                    onMemo={onMemoNews}
                   />
                 ))}
               </div>

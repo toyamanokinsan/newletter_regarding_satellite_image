@@ -330,6 +330,166 @@
 
 ---
 
+## 今回の変更仕様（PLAN.md 2026-03-14 分）
+
+### 変更 11: 論文の信頼度（reliability）を AI 判定・数値表示
+
+**問題**: 現在の `authorityScore` はアブストラクト中の学会名キーワードマッチで算出しているが、arXiv 論文のアブストラクトに学会名が書かれていないケースが多く、所属機関も考慮されていない。ユーザーに信頼度が見えない。
+**対策**: GPT-4o-mini で論文のタイトル・著者・アブストラクトから信頼度を 0〜1 で判定し、DB に保存・UI に表示。既存の `authorityScore` をこの AI 信頼度で置き換える。
+
+#### DB 変更
+
+| モデル | フィールド | 型 | 説明 |
+|---|---|---|---|
+| Paper | `reliability` | Float @default(0) | AI判定の信頼度（0〜1） |
+| Paper | `reliabilityReason` | String? | 信頼度の根拠（1〜2文） |
+| NewsArticle | `reliability` | Float @default(0) | AI判定の信頼度（0〜1） |
+| NewsArticle | `reliabilityReason` | String? | 信頼度の根拠（1〜2文） |
+
+#### AI 判定ロジック（`assessReliability()` 関数）
+
+要約生成時に GPT-4o-mini へ以下を渡す:
+- タイトル、著者リスト、アブストラクト
+
+判定基準:
+- **0.9〜1.0**: トップ学会（CVPR, NeurIPS, ECCV, ICCV, ICML, ICLR）採択 or Google/MIT/Stanford 等の著名機関
+- **0.7〜0.9**: 有名学会（WACV, AAAI, IGARSS 等）採択 or 大手研究機関所属
+- **0.5〜0.7**: 査読付きジャーナル掲載 or 中堅機関
+- **0.3〜0.5**: arXiv プレプリント、所属不明
+- **0〜0.3**: 信頼性に懸念がある
+
+返却形式:
+```json
+{
+  "reliability": 0.85,
+  "reliabilityReason": "CVPR 2025 採択論文。Google Research と MIT の共著。"
+}
+```
+
+#### AI 判定（ニュース）
+
+`summarizeNews()` にも信頼度判定を追加:
+- ソース（発行元）、引用されている研究機関、記事の具体性で判定
+- **0.9〜1.0**: NASA/ESA/IEEE 等の公式発表、Nature/Science 掲載
+- **0.7〜0.9**: 大手テックメディア（TechCrunch, Ars Technica 等）、査読付き情報源
+- **0.5〜0.7**: 一般ニュースメディア、プレスリリース
+- **0.3〜0.5**: ブログ、個人メディア
+- **0〜0.3**: 信頼性に懸念
+
+#### スコアリング変更
+
+- `scoring.ts` の `authorityScore()` を変更
+- 論文・ニュース共通: DB の `reliability` フィールドをそのまま権威性スコアとして使用（0〜1）
+- `reliability` が 0（未判定、既存データ）の場合は従来ロジックにフォールバック
+
+#### UI 表示
+
+- 論文カードに「信頼度: 0.85（CVPR 2025 採択、Google Research 所属）」を表示
+- ニュースカードに「信頼度: 0.90（NASA公式発表に基づく報道）」を表示
+- `TopArticleCard.tsx`, `PaperDetail.tsx`, `NewsDetail.tsx` に信頼度セクション追加
+
+#### フォールバック時の優先
+
+- `recent=true` の段階的フィルタで件数不足のとき、`reliability desc` でソートして信頼度の高い過去記事を優先取得
+
+#### 変更対象ファイル
+
+**変更**:
+- `prisma/schema.prisma` — Paper, NewsArticle に `reliability`, `reliabilityReason` 追加
+- `src/types/index.ts` — PaperSummary/NewsSummary に reliability 関連フィールド追加
+- `src/lib/openai.ts` — `summarizePaper()`, `summarizeNews()` のプロンプトに信頼度判定を追加
+- `src/lib/scoring.ts` — `authorityScore()` を `reliability` フィールドで置き換え（0 の場合は従来ロジックにフォールバック）
+- `src/app/api/collect/route.ts` — reliability を DB 保存
+- `src/app/api/papers/route.ts` — フォールバック時に reliability desc ソート
+- `src/app/api/news/route.ts` — フォールバック時に reliability desc ソート
+- `src/components/home/TopArticleCard.tsx` — 信頼度表示追加
+- `src/components/detail/PaperDetail.tsx` — 信頼度表示追加
+- `src/components/detail/NewsDetail.tsx` — 信頼度表示追加
+
+---
+
+## 今回の変更仕様（PLAN.md 2026-03-14 分 その2）
+
+### 変更 12: ブックマーク機能の強化（ホームボタン追加 + 一覧ページ）
+
+**現状**: ブックマークボタンは詳細ページ（PaperDetail/NewsDetail）にのみ存在。一覧ページなし。`bookmarkedAt` がないためブックマーク日時でソートできない。
+**変更**: ホーム画面のカードにブックマークボタンを追加 + `/bookmarks` 一覧ページを新規作成
+
+#### DB 変更
+
+| モデル | フィールド | 型 | 説明 |
+|---|---|---|---|
+| Paper | `bookmarkedAt` | DateTime? | ブックマークした日時 |
+| NewsArticle | `bookmarkedAt` | DateTime? | ブックマークした日時 |
+
+#### API 変更
+
+- `PATCH /api/papers`, `PATCH /api/news` — `bookmarked: true` 時に `bookmarkedAt: new Date()` をセット、`false` 時に `null`
+- `GET /api/papers?bookmarked=true`, `GET /api/news?bookmarked=true` — `bookmarkedAt desc` でソート
+
+#### UI 変更
+
+- `TopArticleCard.tsx` — ブックマークボタン追加（既存の 👍👎 ボタンの隣）
+- `/bookmarks/page.tsx` — 新規作成。論文+ニュースを `bookmarkedAt desc` で混合表示。日付ごとにグループ化
+- `BottomNav.tsx` — ブックマーク一覧へのリンク追加
+
+#### 変更対象ファイル
+
+**新規作成**:
+- `src/app/bookmarks/page.tsx` — ブックマーク一覧ページ
+
+**変更**:
+- `prisma/schema.prisma` — bookmarkedAt 追加
+- `src/types/index.ts` — bookmarkedAt フィールド追加
+- `src/components/home/TopArticleCard.tsx` — ブックマークボタン追加
+- `src/app/api/papers/route.ts` — PATCH に bookmarkedAt 処理、GET に bookmarkedAt ソート
+- `src/app/api/news/route.ts` — 同上
+- `src/components/layout/BottomNav.tsx` — ブックマークリンク追加
+
+---
+
+## 今回の変更仕様（PLAN.md 2026-03-15 分）
+
+### 変更 13: 記事へのメモ機能
+
+**概要**: 全記事（ブックマーク有無問わず）にユーザーが任意のメモを追加・編集・削除できる機能
+
+#### DB 変更
+
+| モデル | フィールド | 型 | 説明 |
+|---|---|---|---|
+| Paper | `memo` | String? | ユーザーメモ |
+| NewsArticle | `memo` | String? | ユーザーメモ |
+
+#### API 変更
+
+- `PATCH /api/papers` — `memo` パラメータ対応
+- `PATCH /api/news` — `memo` パラメータ対応
+
+#### UI 変更
+
+- `TopArticleCard.tsx` — メモアイコンボタン追加。タップでインライン入力欄を展開、保存/削除可能。メモがある場合はカード内に表示
+- `PaperDetail.tsx` / `NewsDetail.tsx` — メモ入力・編集欄を表示
+- ブックマーク一覧でもメモが表示される（TopArticleCard を流用）
+
+#### 変更対象ファイル
+
+**変更**:
+- `prisma/schema.prisma` — Paper, NewsArticle に memo 追加
+- `src/types/index.ts` — memo フィールド追加
+- `src/app/api/papers/route.ts` — PATCH に memo 対応、formatPaper に memo 追加
+- `src/app/api/news/route.ts` — 同上
+- `src/app/api/papers/[id]/route.ts` — formatに memo 追加
+- `src/app/api/news/[id]/route.ts` — 同上
+- `src/components/home/TopArticleCard.tsx` — メモボタン+インライン入力
+- `src/components/home/CategorySection.tsx` — onMemo ハンドラ追加
+- `src/app/page.tsx` — handleMemo ハンドラ追加
+- `src/app/bookmarks/page.tsx` — handleMemo ハンドラ追加
+- `src/components/detail/PaperDetail.tsx` — メモ入力欄追加
+- `src/components/detail/NewsDetail.tsx` — メモ入力欄追加
+
+---
+
 ## 検討中・未確定
 
 -

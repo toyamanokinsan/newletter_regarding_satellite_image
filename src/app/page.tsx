@@ -1,29 +1,52 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Paper, NewsArticle, Topic } from "@/types";
 import { CategorySection } from "@/components/home/CategorySection";
 
 const TOPICS: Topic[] = ["satellite", "vision", "productivity"];
+const CACHE_KEY = "home_data";
+const SCROLL_KEY = "home_scroll";
+
+function loadCachedData(): {
+  papers: Record<Topic, Paper[]>;
+  news: Record<Topic, NewsArticle[]>;
+} | null {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedData(
+  papers: Record<Topic, Paper[]>,
+  news: Record<Topic, NewsArticle[]>
+) {
+  try {
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ papers, news }));
+  } catch {
+    // ignore quota errors
+  }
+}
 
 export default function HomePage() {
-  const [papersByTopic, setPapersByTopic] = useState<Record<Topic, Paper[]>>({
-    satellite: [],
-    vision: [],
-    productivity: [],
-  });
-  const [newsByTopic, setNewsByTopic] = useState<Record<Topic, NewsArticle[]>>({
-    satellite: [],
-    vision: [],
-    productivity: [],
-  });
-  const [loading, setLoading] = useState(true);
+  const cached = useRef(loadCachedData());
+  const [papersByTopic, setPapersByTopic] = useState<Record<Topic, Paper[]>>(
+    cached.current?.papers ?? { satellite: [], vision: [], productivity: [] }
+  );
+  const [newsByTopic, setNewsByTopic] = useState<Record<Topic, NewsArticle[]>>(
+    cached.current?.news ?? { satellite: [], vision: [], productivity: [] }
+  );
+  const [loading, setLoading] = useState(!cached.current);
   const [collecting, setCollecting] = useState(false);
   const [reclassifying, setReclassifying] = useState(false);
   const [reclassifyResult, setReclassifyResult] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const results = await Promise.all(
         TOPICS.flatMap((topic) => [
@@ -42,6 +65,7 @@ export default function HomePage() {
 
       setPapersByTopic(newPapers);
       setNewsByTopic(newNews);
+      saveCachedData(newPapers, newNews);
     } catch (err) {
       console.error("Failed to fetch data:", err);
     } finally {
@@ -50,8 +74,39 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    fetchData();
+    // If we have cached data, show it immediately and refresh in background
+    if (cached.current) {
+      fetchData(false);
+    } else {
+      fetchData(true);
+    }
   }, [fetchData]);
+
+  // Save scroll position before leaving, restore after mount
+  useEffect(() => {
+    const savedScroll = sessionStorage.getItem(SCROLL_KEY);
+    if (savedScroll && cached.current) {
+      // Restore after a tick so the DOM has rendered
+      requestAnimationFrame(() => {
+        window.scrollTo(0, parseInt(savedScroll, 10));
+      });
+    }
+
+    const saveScroll = () => {
+      sessionStorage.setItem(SCROLL_KEY, String(window.scrollY));
+    };
+
+    // Save on any navigation away
+    window.addEventListener("beforeunload", saveScroll);
+    // Also save periodically for SPA navigation
+    const interval = setInterval(saveScroll, 500);
+
+    return () => {
+      saveScroll();
+      window.removeEventListener("beforeunload", saveScroll);
+      clearInterval(interval);
+    };
+  }, []);
 
   const handleCollect = async () => {
     setCollecting(true);
@@ -109,6 +164,74 @@ export default function HomePage() {
       for (const topic of TOPICS) {
         next[topic] = prev[topic].map((a) =>
           a.id === id ? { ...a, rating: value } : a
+        );
+      }
+      return next;
+    });
+  };
+
+  const handleBookmarkPaper = async (id: string, bookmarked: boolean) => {
+    await fetch("/api/papers", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, bookmarked }),
+    });
+    setPapersByTopic((prev) => {
+      const next = { ...prev };
+      for (const topic of TOPICS) {
+        next[topic] = prev[topic].map((p) =>
+          p.id === id ? { ...p, bookmarked, bookmarkedAt: bookmarked ? new Date().toISOString() : undefined } : p
+        );
+      }
+      return next;
+    });
+  };
+
+  const handleBookmarkNews = async (id: string, bookmarked: boolean) => {
+    await fetch("/api/news", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, bookmarked }),
+    });
+    setNewsByTopic((prev) => {
+      const next = { ...prev };
+      for (const topic of TOPICS) {
+        next[topic] = prev[topic].map((a) =>
+          a.id === id ? { ...a, bookmarked, bookmarkedAt: bookmarked ? new Date().toISOString() : undefined } : a
+        );
+      }
+      return next;
+    });
+  };
+
+  const handleMemoPaper = async (id: string, memo: string) => {
+    await fetch("/api/papers", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, memo }),
+    });
+    setPapersByTopic((prev) => {
+      const next = { ...prev };
+      for (const topic of TOPICS) {
+        next[topic] = prev[topic].map((p) =>
+          p.id === id ? { ...p, memo: memo || undefined } : p
+        );
+      }
+      return next;
+    });
+  };
+
+  const handleMemoNews = async (id: string, memo: string) => {
+    await fetch("/api/news", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, memo }),
+    });
+    setNewsByTopic((prev) => {
+      const next = { ...prev };
+      for (const topic of TOPICS) {
+        next[topic] = prev[topic].map((a) =>
+          a.id === id ? { ...a, memo: memo || undefined } : a
         );
       }
       return next;
@@ -206,6 +329,10 @@ export default function HomePage() {
               news={newsByTopic[topic]}
               onRatePaper={handleRatePaper}
               onRateNews={handleRateNews}
+              onBookmarkPaper={handleBookmarkPaper}
+              onBookmarkNews={handleBookmarkNews}
+              onMemoPaper={handleMemoPaper}
+              onMemoNews={handleMemoNews}
             />
           ))}
         </div>

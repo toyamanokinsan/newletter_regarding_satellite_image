@@ -15,7 +15,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Paper not found" }, { status: 404 });
     }
 
-    const result = await summarizePaper(paper.title, paper.abstract);
+    const authors = JSON.parse(paper.authors) as string[];
+    const result = await summarizePaper(paper.title, paper.abstract, authors);
     if (!result) {
       return NextResponse.json({ error: "Summarization failed" }, { status: 500 });
     }
@@ -25,10 +26,12 @@ export async function POST(request: NextRequest) {
       data: {
         summaryJson: JSON.stringify(result.summary),
         recommendationReason: result.recommendationReason,
+        reliability: result.reliability,
+        reliabilityReason: result.reliabilityReason,
       },
     });
 
-    return NextResponse.json({ summary: result.summary, recommendationReason: result.recommendationReason });
+    return NextResponse.json({ summary: result.summary, recommendationReason: result.recommendationReason, reliability: result.reliability, reliabilityReason: result.reliabilityReason });
   }
 
   if (type === "news") {
@@ -48,10 +51,12 @@ export async function POST(request: NextRequest) {
         summaryText: result.summary.summary,
         summaryJson: JSON.stringify(result.summary),
         recommendationReason: result.recommendationReason,
+        reliability: result.reliability,
+        reliabilityReason: result.reliabilityReason,
       },
     });
 
-    return NextResponse.json({ summary: result.summary, recommendationReason: result.recommendationReason });
+    return NextResponse.json({ summary: result.summary, recommendationReason: result.recommendationReason, reliability: result.reliability, reliabilityReason: result.reliabilityReason });
   }
 
   return NextResponse.json({ error: "Invalid type" }, { status: 400 });

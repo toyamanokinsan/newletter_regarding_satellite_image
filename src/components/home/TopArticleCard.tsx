@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Paper, NewsArticle, Category } from "@/types";
 import { CategoryBadge } from "@/components/ui/CategoryBadge";
@@ -22,9 +23,11 @@ interface TopArticleCardProps {
   item: Paper | NewsArticle;
   type: "paper" | "news";
   onRate?: (id: string, value: number) => void;
+  onBookmark?: (id: string, bookmarked: boolean) => void;
+  onMemo?: (id: string, memo: string) => void;
 }
 
-export function TopArticleCard({ item, type, onRate }: TopArticleCardProps) {
+export function TopArticleCard({ item, type, onRate, onBookmark, onMemo }: TopArticleCardProps) {
   const href = `/${type === "paper" ? "papers" : "news"}/${item.id}`;
   const paper = isPaper(item) ? item : null;
   const news = !isPaper(item) ? item : null;
@@ -42,6 +45,36 @@ export function TopArticleCard({ item, type, onRate }: TopArticleCardProps) {
     e.preventDefault();
     e.stopPropagation();
     onRate?.(item.id, value);
+  };
+
+  const handleBookmark = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onBookmark?.(item.id, !item.bookmarked);
+  };
+
+  const [memoOpen, setMemoOpen] = useState(false);
+  const [memoText, setMemoText] = useState(item.memo || "");
+
+  const handleMemoToggle = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMemoOpen((prev) => !prev);
+    if (!memoOpen) setMemoText(item.memo || "");
+  };
+
+  const handleMemoSave = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onMemo?.(item.id, memoText);
+    setMemoOpen(false);
+  };
+
+  const handleMemoCancel = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMemoOpen(false);
+    setMemoText(item.memo || "");
   };
 
   return (
@@ -70,6 +103,23 @@ export function TopArticleCard({ item, type, onRate }: TopArticleCardProps) {
             </div>
           </div>
         </div>
+
+        {/* Reliability */}
+        {item.reliability > 0 && (
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-xs font-semibold text-gray-500">信頼度:</span>
+            <span className={`text-xs font-bold ${
+              item.reliability >= 0.8 ? "text-green-600" :
+              item.reliability >= 0.5 ? "text-yellow-600" :
+              "text-red-500"
+            }`}>
+              {item.reliability.toFixed(2)}
+            </span>
+            {item.reliabilityReason && (
+              <span className="text-xs text-gray-400">({item.reliabilityReason})</span>
+            )}
+          </div>
+        )}
 
         {/* Recommendation reason */}
         {item.recommendationReason && (
@@ -109,12 +159,78 @@ export function TopArticleCard({ item, type, onRate }: TopArticleCardProps) {
           )}
         </div>
 
+        {/* Memo */}
+        {item.memo && !memoOpen && (
+          <div
+            className="mt-2 px-3 py-1.5 bg-yellow-50 rounded-lg border border-yellow-100 cursor-pointer"
+            onClick={handleMemoToggle}
+          >
+            <p className="text-xs text-yellow-800 flex items-start gap-1.5">
+              <span className="flex-shrink-0">📝</span>
+              <span>{item.memo}</span>
+            </p>
+          </div>
+        )}
+        {memoOpen && (
+          <div className="mt-2" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+            <textarea
+              className="w-full text-xs border border-gray-200 rounded-lg p-2 resize-none focus:outline-none focus:border-blue-300"
+              rows={2}
+              placeholder="メモを入力..."
+              value={memoText}
+              onChange={(e) => setMemoText(e.target.value)}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+            <div className="flex gap-1 mt-1 justify-end">
+              <button
+                onClick={handleMemoCancel}
+                className="text-xs px-2 py-0.5 text-gray-500 hover:text-gray-700 rounded"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleMemoSave}
+                className="text-xs px-2 py-0.5 bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Footer */}
         <div className="mt-3 flex items-center gap-2">
           <CategoryBadge category={item.category} />
           <div className="flex-1">
             <ScoreBar score={item.score} />
           </div>
+          <button
+            onClick={handleMemoToggle}
+            className={`p-1 rounded transition-colors ${
+              item.memo
+                ? "text-yellow-500"
+                : "text-gray-300 hover:text-yellow-400"
+            }`}
+            aria-label="メモ"
+          >
+            <svg className="w-4 h-4" fill={item.memo ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </button>
+          <button
+            onClick={handleBookmark}
+            className={`p-1 rounded transition-colors ${
+              item.bookmarked
+                ? "text-amber-500"
+                : "text-gray-300 hover:text-amber-400"
+            }`}
+            aria-label="ブックマーク"
+          >
+            <svg className="w-4 h-4" fill={item.bookmarked ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+            </svg>
+          </button>
           <div className="flex items-center gap-0.5">
             <button
               onClick={(e) => handleRate(e, 1)}

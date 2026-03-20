@@ -4,6 +4,8 @@ import { PaperSummary, Topic } from "@/types";
 export interface SummaryWithReason<T> {
   summary: T;
   recommendationReason: string;
+  reliability: number;
+  reliabilityReason: string;
 }
 
 let _client: OpenAI | null = null;
@@ -17,7 +19,8 @@ function getClient(): OpenAI {
 
 export async function summarizePaper(
   title: string,
-  abstract: string
+  abstract: string,
+  authors?: string[]
 ): Promise<SummaryWithReason<PaperSummary> | null> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -27,14 +30,17 @@ export async function summarizePaper(
 
   const client = getClient();
 
+  const authorsStr = authors && authors.length > 0 ? `著者: ${authors.slice(0, 10).join(", ")}` : "";
+
   const prompt = `あなたは衛星画像・リモートセンシングAI研究の専門家です。
 以下の論文を分析し、日本語で構造化サマリーをJSON形式で出力してください。
 専門家が読んで内容を把握できる程度に具体的に書いてください。
 
 タイトル: ${title}
+${authorsStr}
 アブストラクト: ${abstract}
 
-以下の7項目を含む有効なJSONオブジェクトのみ返してください：
+以下の9項目を含む有効なJSONオブジェクトのみ返してください：
 {
   "objective": "研究が解決しようとしている具体的な課題と目的を2〜3文で。既存手法のどのような問題を解決するのかを含める（日本語）",
   "novelty": "この研究の新規性を3〜4文で。先行研究（手法名や著者名があれば明記）が抱えていた課題を述べ、それに対して本研究がどのような新しいアプローチ・着眼点で解決しているかを具体的に対比して説明する（日本語）",
@@ -42,7 +48,9 @@ export async function summarizePaper(
   "results": "主要な実験結果と性能を2〜3文で。ベンチマークデータセット名、既存手法との比較数値（精度差）を含める（日本語）",
   "limitations": "制限事項や今後の課題を1〜2文で（日本語）",
   "metrics": "使用された評価指標をカンマ区切りで（例：mAP, IoU, SSIM, PSNR, F1-score）",
-  "recommendationReason": "この論文をおすすめする理由を1〜2文で。エンジニアにとってどのような点が注目に値するか（日本語）"
+  "recommendationReason": "この論文をおすすめする理由を1〜2文で。エンジニアにとってどのような点が注目に値するか（日本語）",
+  "reliability": "この論文の信頼度を0〜1の数値で。判定基準: 0.9〜1.0=トップ学会(CVPR,NeurIPS,ECCV,ICCV,ICML,ICLR)採択またはGoogle/MIT/Stanford等の著名機関, 0.7〜0.9=有名学会(WACV,AAAI,IGARSS等)採択または大手研究機関, 0.5〜0.7=査読付きジャーナルまたは中堅機関, 0.3〜0.5=arXivプレプリント・所属不明, 0〜0.3=信頼性に懸念。著者の所属機関、学会採択の有無、ベンチマーク評価の充実度を総合的に判断すること",
+  "reliabilityReason": "信頼度スコアの根拠を1〜2文で。学会名、所属機関名、評価の充実度など判断材料を具体的に記述（日本語）"
 }`;
 
   try {
@@ -58,10 +66,12 @@ export async function summarizePaper(
     if (!content) return null;
 
     const parsed = JSON.parse(content);
-    const { recommendationReason, ...summaryFields } = parsed;
+    const { recommendationReason, reliability, reliabilityReason, ...summaryFields } = parsed;
     return {
       summary: summaryFields as PaperSummary,
       recommendationReason: recommendationReason || "",
+      reliability: typeof reliability === "number" ? Math.max(0, Math.min(1, reliability)) : 0,
+      reliabilityReason: reliabilityReason || "",
     };
   } catch (error) {
     console.error("Failed to summarize paper:", error);
@@ -94,12 +104,14 @@ export async function summarizeNews(
 タイトル: ${title}
 本文: ${content.slice(0, 1500)}
 
-以下の4項目を含む有効なJSONオブジェクトのみ返してください：
+以下の6項目を含む有効なJSONオブジェクトのみ返してください：
 {
   "summary": "何が起きたか・何が発表されたかを2〜3文で。結論ファーストで、具体的な製品名・組織名・数値があれば含める（日本語）",
   "novelty": "従来と比べて何が新しいか・なぜ重要かを2〜3文で。既存の技術や製品との違い、業界にとっての意義を具体的に（日本語）",
   "application": "どのように使えそうかを2〜3文で。想定される応用先（農業、防災、都市計画、防衛など）、実用面でのインパクト、導入メリットを具体的に（日本語）",
-  "recommendationReason": "このニュースをおすすめする理由を1〜2文で。エンジニアにとってどのような点が注目に値するか（日本語）"
+  "recommendationReason": "このニュースをおすすめする理由を1〜2文で。エンジニアにとってどのような点が注目に値するか（日本語）",
+  "reliability": "この記事の信頼度を0〜1の数値で。判定基準: 0.9〜1.0=NASA/ESA/IEEE等の公式発表やNature/Science掲載, 0.7〜0.9=大手テックメディア(TechCrunch等)や査読付き情報源, 0.5〜0.7=一般ニュースメディアやプレスリリース, 0.3〜0.5=ブログや個人メディア, 0〜0.3=信頼性に懸念。ソースの権威性、引用されている研究機関、記事の具体性を総合判断すること",
+  "reliabilityReason": "信頼度スコアの根拠を1〜2文で。ソース名、引用機関、記事の具体性など判断材料を記述（日本語）"
 }`;
 
   try {
@@ -114,10 +126,12 @@ export async function summarizeNews(
     const result = response.choices[0]?.message?.content;
     if (!result) return null;
     const parsed = JSON.parse(result);
-    const { recommendationReason, ...summaryFields } = parsed;
+    const { recommendationReason, reliability, reliabilityReason, ...summaryFields } = parsed;
     return {
       summary: summaryFields as NewsSummaryResult,
       recommendationReason: recommendationReason || "",
+      reliability: typeof reliability === "number" ? Math.max(0, Math.min(1, reliability)) : 0,
+      reliabilityReason: reliabilityReason || "",
     };
   } catch (error) {
     console.error("Failed to summarize news:", error);

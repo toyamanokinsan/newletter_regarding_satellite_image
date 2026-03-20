@@ -36,6 +36,15 @@ export default function NewsDetailPage() {
     setArticle((prev) => (prev ? { ...prev, bookmarked } : prev));
   };
 
+  const handleMemo = async (articleId: string, memo: string) => {
+    await fetch("/api/news", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: articleId, memo }),
+    });
+    setArticle((prev) => (prev ? { ...prev, memo: memo || undefined } : prev));
+  };
+
   if (loading)
     return (
       <div className="px-4 py-6 space-y-4">
@@ -58,5 +67,5 @@ export default function NewsDetailPage() {
       </div>
     );
 
-  return <NewsDetail article={article} onBookmark={handleBookmark} />;
+  return <NewsDetail article={article} onBookmark={handleBookmark} onMemo={handleMemo} />;
 }

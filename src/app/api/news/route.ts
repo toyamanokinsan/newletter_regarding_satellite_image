@@ -14,10 +14,14 @@ function formatArticle(a: {
   summaryText: string | null;
   summaryJson: string | null;
   recommendationReason: string | null;
+  reliability: number;
+  reliabilityReason: string | null;
   score: number;
   lat: number | null;
   lng: number | null;
   bookmarked: boolean;
+  bookmarkedAt: Date | null;
+  memo: string | null;
   rating: number;
   isFallback: boolean;
   createdAt: Date;
@@ -36,10 +40,14 @@ function formatArticle(a: {
       ? (JSON.parse(a.summaryJson) as NewsSummary)
       : undefined,
     recommendationReason: a.recommendationReason ?? undefined,
+    reliability: a.reliability,
+    reliabilityReason: a.reliabilityReason ?? undefined,
     score: a.score,
     lat: a.lat ?? undefined,
     lng: a.lng ?? undefined,
     bookmarked: a.bookmarked,
+    bookmarkedAt: a.bookmarkedAt?.toISOString(),
+    memo: a.memo ?? undefined,
     rating: a.rating,
     isFallback: a.isFallback,
     createdAt: a.createdAt.toISOString(),
@@ -61,6 +69,10 @@ export async function GET(request: NextRequest) {
   if (category && category !== "all") where.category = category;
   if (topic && topic !== "all") where.topic = topic;
   if (bookmarked) where.bookmarked = true;
+
+  // Exclude news published before 2024
+  const minDate = new Date("2024-01-01T00:00:00Z");
+  where.publishedAt = { gte: minDate };
 
   // Recent mode: progressively widen date range, exclude bad-rated articles
   if (recent) {
@@ -98,11 +110,11 @@ export async function GET(request: NextRequest) {
       if (articles.length >= pageSize) break;
     }
 
-    // Fallback to all-time if still not enough
+    // Fallback to all-time if still not enough — prioritize high reliability
     if (articles.length < pageSize) {
       const found = await prisma.newsArticle.findMany({
         where,
-        orderBy: { score: "desc" },
+        orderBy: [{ reliability: "desc" }, { score: "desc" }],
         take: fetchSize,
       });
 
@@ -129,10 +141,14 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  const orderBy = bookmarked
+    ? { bookmarkedAt: "desc" as const }
+    : { score: "desc" as const };
+
   const [articles, total] = await Promise.all([
     prisma.newsArticle.findMany({
       where,
-      orderBy: { score: "desc" },
+      orderBy,
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -149,15 +165,21 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const { id, bookmarked } = await request.json();
+  const body = await request.json();
+  const { id } = body;
   if (!id) {
     return NextResponse.json({ error: "id required" }, { status: 400 });
   }
 
-  const article = await prisma.newsArticle.update({
-    where: { id },
-    data: { bookmarked },
-  });
+  const data: Record<string, unknown> = {};
+  if ("bookmarked" in body) {
+    data.bookmarked = body.bookmarked;
+    data.bookmarkedAt = body.bookmarked ? new Date() : null;
+  }
+  if ("memo" in body) {
+    data.memo = body.memo || null;
+  }
 
+  const article = await prisma.newsArticle.update({ where: { id }, data });
   return NextResponse.json(formatArticle(article));
 }

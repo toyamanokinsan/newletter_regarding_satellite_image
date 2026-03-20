@@ -43,14 +43,19 @@ export async function POST(request: NextRequest) {
 
   // --- Topic classification with GPT-4o-mini ---
   // Filter out duplicates first, then classify new items in batch
+  // Skip items published before 2024
+  const minPublishedDate = new Date("2024-01-01T00:00:00Z");
+
   const newPapers = [];
   for (const entry of arxivEntries) {
+    if (new Date(entry.publishedAt) < minPublishedDate) continue;
     const existing = await prisma.paper.findUnique({ where: { id: entry.id } });
     if (!existing) newPapers.push(entry);
   }
 
   const newNews = [];
   for (const article of newsArticles) {
+    if (new Date(article.publishedAt) < minPublishedDate) continue;
     const existing = await prisma.newsArticle.findUnique({ where: { url: article.url } });
     if (!existing) newNews.push(article);
   }
@@ -85,8 +90,8 @@ export async function POST(request: NextRequest) {
       }
       const topic = (classifiedTopic as Topic) || entry.topic;
 
-      // Summarize with GPT-4o-mini
-      const result = await summarizePaper(entry.title, entry.abstract);
+      // Summarize with GPT-4o-mini (pass authors for reliability assessment)
+      const result = await summarizePaper(entry.title, entry.abstract, entry.authors);
 
       // Extract and geocode location
       let lat: number | undefined;
@@ -101,12 +106,14 @@ export async function POST(request: NextRequest) {
       }
 
       const category = (entry.categories[0] || "Other") as Category;
+      const reliabilityVal = result?.reliability ?? 0;
       const score = calculateScore({
         publishedAt: new Date(entry.publishedAt),
         isPaper: true,
         category,
         text: entry.title + " " + entry.abstract,
         categoryAdjustments,
+        reliability: reliabilityVal,
       });
 
       await prisma.paper.create({
@@ -121,6 +128,8 @@ export async function POST(request: NextRequest) {
           topic,
           summaryJson: result ? JSON.stringify(result.summary) : null,
           recommendationReason: result?.recommendationReason || null,
+          reliability: reliabilityVal,
+          reliabilityReason: result?.reliabilityReason || null,
           score,
           lat: lat ?? null,
           lng: lng ?? null,
@@ -160,12 +169,14 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      const newsReliability = result?.reliability ?? 0;
       const score = calculateScore({
         publishedAt: new Date(article.publishedAt),
         isPaper: false,
         category: article.category,
         source: article.source,
         categoryAdjustments,
+        reliability: newsReliability,
       });
 
       await prisma.newsArticle.create({
@@ -181,6 +192,8 @@ export async function POST(request: NextRequest) {
           summaryText: result ? result.summary.summary : null,
           summaryJson: result ? JSON.stringify(result.summary) : null,
           recommendationReason: result?.recommendationReason || null,
+          reliability: newsReliability,
+          reliabilityReason: result?.reliabilityReason || null,
           score,
           lat: lat ?? null,
           lng: lng ?? null,
@@ -219,17 +232,20 @@ export async function POST(request: NextRequest) {
         const fallbackEntries = await fetchArxivFallback(topic, 5);
 
         for (const entry of fallbackEntries) {
+          if (new Date(entry.publishedAt) < minPublishedDate) continue;
           const existing = await prisma.paper.findUnique({ where: { id: entry.id } });
           if (existing) continue;
 
-          const result = await summarizePaper(entry.title, entry.abstract);
+          const result = await summarizePaper(entry.title, entry.abstract, entry.authors);
           const category = (entry.categories[0] || "Other") as Category;
+          const fbReliability = result?.reliability ?? 0;
           const score = calculateScore({
             publishedAt: new Date(entry.publishedAt),
             isPaper: true,
             category,
             text: entry.title + " " + entry.abstract,
             categoryAdjustments,
+            reliability: fbReliability,
           });
 
           await prisma.paper.create({
@@ -244,6 +260,8 @@ export async function POST(request: NextRequest) {
               topic: entry.topic,
               summaryJson: result ? JSON.stringify(result.summary) : null,
               recommendationReason: result?.recommendationReason || null,
+              reliability: fbReliability,
+              reliabilityReason: result?.reliabilityReason || null,
               score,
               lat: null,
               lng: null,

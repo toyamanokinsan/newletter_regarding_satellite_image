@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { NewsArticle } from "@/types";
 import { CategoryBadge } from "@/components/ui/CategoryBadge";
 import { ScoreBar } from "@/components/ui/ScoreBar";
@@ -8,9 +9,17 @@ import { TimeSlider } from "@/components/ui/TimeSlider";
 interface NewsDetailProps {
   article: NewsArticle;
   onBookmark?: (id: string, bookmarked: boolean) => void;
+  onMemo?: (id: string, memo: string) => void;
 }
 
-export function NewsDetail({ article, onBookmark }: NewsDetailProps) {
+export function NewsDetail({ article, onBookmark, onMemo }: NewsDetailProps) {
+  const [memoEditing, setMemoEditing] = useState(false);
+  const [memoText, setMemoText] = useState(article.memo || "");
+
+  const handleMemoSave = () => {
+    onMemo?.(article.id, memoText);
+    setMemoEditing(false);
+  };
   const dateStr = new Date(article.publishedAt).toLocaleDateString("ja-JP", {
     year: "numeric",
     month: "long",
@@ -47,9 +56,24 @@ export function NewsDetail({ article, onBookmark }: NewsDetailProps) {
           <span>{dateStr}</span>
         </div>
 
-        <div className="mt-3">
+        <div className="mt-3 flex items-center gap-4">
           <ScoreBar score={article.score} showValue />
+          {article.reliability > 0 && (
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <span className="text-xs font-semibold text-gray-500">信頼度:</span>
+              <span className={`text-sm font-bold ${
+                article.reliability >= 0.8 ? "text-green-600" :
+                article.reliability >= 0.5 ? "text-yellow-600" :
+                "text-red-500"
+              }`}>
+                {article.reliability.toFixed(2)}
+              </span>
+            </div>
+          )}
         </div>
+        {article.reliabilityReason && (
+          <p className="mt-1 text-xs text-gray-400">{article.reliabilityReason}</p>
+        )}
       </div>
 
       {/* AI Summary */}
@@ -104,6 +128,53 @@ export function NewsDetail({ article, onBookmark }: NewsDetailProps) {
         <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
           {article.content}
         </p>
+      </div>
+
+      {/* Memo */}
+      <div className="mb-6">
+        <h2 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+          <span>📝</span> メモ
+        </h2>
+        {memoEditing ? (
+          <div>
+            <textarea
+              className="w-full text-sm border border-gray-200 rounded-xl p-3 resize-none focus:outline-none focus:border-blue-300"
+              rows={3}
+              placeholder="メモを入力..."
+              value={memoText}
+              onChange={(e) => setMemoText(e.target.value)}
+            />
+            <div className="flex gap-2 mt-2 justify-end">
+              <button
+                onClick={() => { setMemoEditing(false); setMemoText(article.memo || ""); }}
+                className="text-sm px-3 py-1 text-gray-500 hover:text-gray-700 rounded"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleMemoSave}
+                className="text-sm px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        ) : article.memo ? (
+          <div
+            className="bg-yellow-50 rounded-xl p-3 border border-yellow-100 cursor-pointer hover:border-yellow-200 transition-colors"
+            onClick={() => setMemoEditing(true)}
+          >
+            <p className="text-sm text-yellow-800 whitespace-pre-wrap">{article.memo}</p>
+            <p className="text-xs text-yellow-500 mt-1">クリックして編集</p>
+          </div>
+        ) : (
+          <button
+            onClick={() => setMemoEditing(true)}
+            className="text-sm text-gray-400 hover:text-gray-600 border border-dashed border-gray-200 rounded-xl px-4 py-3 w-full hover:border-gray-300 transition-colors"
+          >
+            + メモを追加
+          </button>
+        )}
       </div>
 
       {/* Actions */}

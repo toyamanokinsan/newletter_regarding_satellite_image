@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Paper } from "@/types";
 import { CategoryBadge } from "@/components/ui/CategoryBadge";
 import { ScoreBar } from "@/components/ui/ScoreBar";
@@ -7,6 +8,7 @@ import { ScoreBar } from "@/components/ui/ScoreBar";
 interface PaperDetailProps {
   paper: Paper;
   onBookmark?: (id: string, bookmarked: boolean) => void;
+  onMemo?: (id: string, memo: string) => void;
 }
 
 const SUMMARY_ITEMS = [
@@ -18,7 +20,15 @@ const SUMMARY_ITEMS = [
   { key: "metrics" as const, label: "評価指標", icon: "📏" },
 ];
 
-export function PaperDetail({ paper, onBookmark }: PaperDetailProps) {
+export function PaperDetail({ paper, onBookmark, onMemo }: PaperDetailProps) {
+  const [memoEditing, setMemoEditing] = useState(false);
+  const [memoText, setMemoText] = useState(paper.memo || "");
+
+  const handleMemoSave = () => {
+    onMemo?.(paper.id, memoText);
+    setMemoEditing(false);
+  };
+
   const dateStr = new Date(paper.publishedAt).toLocaleDateString("ja-JP", {
     year: "numeric",
     month: "long",
@@ -62,9 +72,24 @@ export function PaperDetail({ paper, onBookmark }: PaperDetailProps) {
           </p>
         )}
 
-        <div className="mt-3">
+        <div className="mt-3 flex items-center gap-4">
           <ScoreBar score={paper.score} showValue />
+          {paper.reliability > 0 && (
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <span className="text-xs font-semibold text-gray-500">信頼度:</span>
+              <span className={`text-sm font-bold ${
+                paper.reliability >= 0.8 ? "text-green-600" :
+                paper.reliability >= 0.5 ? "text-yellow-600" :
+                "text-red-500"
+              }`}>
+                {paper.reliability.toFixed(2)}
+              </span>
+            </div>
+          )}
         </div>
+        {paper.reliabilityReason && (
+          <p className="mt-1 text-xs text-gray-400">{paper.reliabilityReason}</p>
+        )}
       </div>
 
       {/* AI Summary Cards */}
@@ -101,6 +126,53 @@ export function PaperDetail({ paper, onBookmark }: PaperDetailProps) {
       <div className="mb-6">
         <h2 className="text-sm font-semibold text-gray-700 mb-2">Abstract</h2>
         <p className="text-sm text-gray-600 leading-relaxed">{paper.abstract}</p>
+      </div>
+
+      {/* Memo */}
+      <div className="mb-6">
+        <h2 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+          <span>📝</span> メモ
+        </h2>
+        {memoEditing ? (
+          <div>
+            <textarea
+              className="w-full text-sm border border-gray-200 rounded-xl p-3 resize-none focus:outline-none focus:border-blue-300"
+              rows={3}
+              placeholder="メモを入力..."
+              value={memoText}
+              onChange={(e) => setMemoText(e.target.value)}
+            />
+            <div className="flex gap-2 mt-2 justify-end">
+              <button
+                onClick={() => { setMemoEditing(false); setMemoText(paper.memo || ""); }}
+                className="text-sm px-3 py-1 text-gray-500 hover:text-gray-700 rounded"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleMemoSave}
+                className="text-sm px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        ) : paper.memo ? (
+          <div
+            className="bg-yellow-50 rounded-xl p-3 border border-yellow-100 cursor-pointer hover:border-yellow-200 transition-colors"
+            onClick={() => setMemoEditing(true)}
+          >
+            <p className="text-sm text-yellow-800 whitespace-pre-wrap">{paper.memo}</p>
+            <p className="text-xs text-yellow-500 mt-1">クリックして編集</p>
+          </div>
+        ) : (
+          <button
+            onClick={() => setMemoEditing(true)}
+            className="text-sm text-gray-400 hover:text-gray-600 border border-dashed border-gray-200 rounded-xl px-4 py-3 w-full hover:border-gray-300 transition-colors"
+          >
+            + メモを追加
+          </button>
+        )}
       </div>
 
       {/* Actions */}

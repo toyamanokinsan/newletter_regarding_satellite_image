@@ -13,10 +13,14 @@ function formatPaper(p: {
   topic: string;
   summaryJson: string | null;
   recommendationReason: string | null;
+  reliability: number;
+  reliabilityReason: string | null;
   score: number;
   lat: number | null;
   lng: number | null;
   bookmarked: boolean;
+  bookmarkedAt: Date | null;
+  memo: string | null;
   rating: number;
   isFallback: boolean;
   createdAt: Date;
@@ -34,10 +38,14 @@ function formatPaper(p: {
       ? (JSON.parse(p.summaryJson) as PaperSummary)
       : undefined,
     recommendationReason: p.recommendationReason ?? undefined,
+    reliability: p.reliability,
+    reliabilityReason: p.reliabilityReason ?? undefined,
     score: p.score,
     lat: p.lat ?? undefined,
     lng: p.lng ?? undefined,
     bookmarked: p.bookmarked,
+    bookmarkedAt: p.bookmarkedAt?.toISOString(),
+    memo: p.memo ?? undefined,
     rating: p.rating,
     isFallback: p.isFallback,
     createdAt: p.createdAt.toISOString(),
@@ -58,6 +66,10 @@ export async function GET(request: NextRequest) {
   if (category && category !== "all") where.category = category;
   if (topic && topic !== "all") where.topic = topic;
   if (bookmarked) where.bookmarked = true;
+
+  // Exclude papers published before 2024
+  const minDate = new Date("2024-01-01T00:00:00Z");
+  where.publishedAt = { gte: minDate };
 
   // Recent mode: progressively widen date range, exclude bad-rated articles
   if (recent) {
@@ -81,11 +93,11 @@ export async function GET(request: NextRequest) {
       if (papers.length >= pageSize) break;
     }
 
-    // Fallback to all-time if still not enough
+    // Fallback to all-time if still not enough — prioritize high reliability
     if (papers.length < pageSize) {
       const found = await prisma.paper.findMany({
         where,
-        orderBy: { score: "desc" },
+        orderBy: [{ reliability: "desc" }, { score: "desc" }],
         take: pageSize,
       });
       papers = found.map(formatPaper);
@@ -100,10 +112,14 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  const orderBy = bookmarked
+    ? { bookmarkedAt: "desc" as const }
+    : { score: "desc" as const };
+
   const [papers, total] = await Promise.all([
     prisma.paper.findMany({
       where,
-      orderBy: { score: "desc" },
+      orderBy,
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -120,15 +136,21 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const { id, bookmarked } = await request.json();
+  const body = await request.json();
+  const { id } = body;
   if (!id) {
     return NextResponse.json({ error: "id required" }, { status: 400 });
   }
 
-  const paper = await prisma.paper.update({
-    where: { id },
-    data: { bookmarked },
-  });
+  const data: Record<string, unknown> = {};
+  if ("bookmarked" in body) {
+    data.bookmarked = body.bookmarked;
+    data.bookmarkedAt = body.bookmarked ? new Date() : null;
+  }
+  if ("memo" in body) {
+    data.memo = body.memo || null;
+  }
 
+  const paper = await prisma.paper.update({ where: { id }, data });
   return NextResponse.json(formatPaper(paper));
 }

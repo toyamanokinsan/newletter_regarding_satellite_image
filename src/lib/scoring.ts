@@ -210,6 +210,7 @@ export function calculateScore(params: {
   persona?: Persona;
   trendingCount?: number;
   categoryAdjustments?: Record<string, number>;
+  reliability?: number;
 }): number {
   const {
     publishedAt,
@@ -220,10 +221,14 @@ export function calculateScore(params: {
     persona = "general",
     trendingCount = 1,
     categoryAdjustments,
+    reliability,
   } = params;
 
   const recency = recencyScore(publishedAt);
-  const authority = authorityScore(isPaper, category, source, text);
+  // Use AI-assessed reliability if available (> 0), otherwise fall back to keyword-based authority
+  const authority = reliability && reliability > 0
+    ? reliability
+    : authorityScore(isPaper, category, source, text);
   let relevance = relevanceScore(category, persona);
 
   // Apply category adjustment from user ratings

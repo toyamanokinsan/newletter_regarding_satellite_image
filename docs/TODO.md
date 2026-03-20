@@ -55,6 +55,38 @@
 - [x] T10: BottomNav にフィード一覧リンク追加
 - [x] T11: ビルド確認（成功）
 
+## 完了済み（SPEC 2026-03-15: メモ機能）
+
+- [x] T37: DB スキーマ — Paper/NewsArticle に memo 追加
+- [x] T38: 型定義 — memo フィールド追加
+- [x] T39: API — PATCH に memo 対応、format 関数に memo 追加
+- [x] T40: TopArticleCard — メモボタン+インライン入力
+- [x] T41: CategorySection / page.tsx / bookmarks — onMemo ハンドラ追加
+- [x] T42: PaperDetail / NewsDetail — メモ入力欄追加
+- [x] T43: ビルド確認（成功）
+
+## 完了済み（SPEC 2026-03-14: ブックマーク機能強化）
+
+- [x] T30: DB スキーマ — Paper/NewsArticle に bookmarkedAt 追加
+- [x] T31: 型定義 — bookmarkedAt フィールド追加
+- [x] T32: papers/news API — PATCH に bookmarkedAt 処理、GET で bookmarkedAt ソート
+- [x] T33: TopArticleCard — ブックマークボタン追加
+- [x] T34: /bookmarks ページ新規作成（bookmarkedAt desc、日付グループ化）
+- [x] T35: BottomNav — ブックマークリンク追加
+- [x] T36: ビルド確認（成功）
+
+## 完了済み（SPEC 2026-03-14: 信頼度フィールド追加）
+
+- [x] T21: DB スキーマ — Paper/NewsArticle に reliability, reliabilityReason 追加
+- [x] T22: 型定義 — types/index.ts に reliability フィールド追加
+- [x] T23: openai.ts — summarizePaper/summarizeNews プロンプトに信頼度判定追加
+- [x] T24: scoring.ts — authorityScore を reliability フィールドで置き換え（0の場合は従来フォールバック）
+- [x] T25: collect/route.ts — reliability を DB 保存
+- [x] T26: papers/news API — formatPaper/formatArticle に reliability 追加、フォールバック時に reliability desc
+- [x] T27: TopArticleCard.tsx — 信頼度表示追加
+- [x] T28: PaperDetail.tsx / NewsDetail.tsx — 信頼度表示追加
+- [x] T29: ビルド確認（成功）
+
 ---
 
 ## メモ

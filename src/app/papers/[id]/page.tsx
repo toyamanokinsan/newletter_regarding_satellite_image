@@ -36,6 +36,15 @@ export default function PaperDetailPage() {
     setPaper((prev) => (prev ? { ...prev, bookmarked } : prev));
   };
 
+  const handleMemo = async (paperId: string, memo: string) => {
+    await fetch("/api/papers", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: paperId, memo }),
+    });
+    setPaper((prev) => (prev ? { ...prev, memo: memo || undefined } : prev));
+  };
+
   if (loading)
     return (
       <div className="px-4 py-6 space-y-4">
@@ -58,5 +67,5 @@ export default function PaperDetailPage() {
       </div>
     );
 
-  return <PaperDetail paper={paper} onBookmark={handleBookmark} />;
+  return <PaperDetail paper={paper} onBookmark={handleBookmark} onMemo={handleMemo} />;
 }

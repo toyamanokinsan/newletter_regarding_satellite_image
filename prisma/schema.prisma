@@ -22,10 +22,14 @@ model Paper {
   topic                String   @default("satellite") // satellite / vision / productivity
   summaryJson          String? // GPT-4o generated 5-item JSON
   recommendationReason String? // AI-generated recommendation reason
+  reliability          Float    @default(0) // AI-assessed reliability (0-1)
+  reliabilityReason    String? // reason for reliability score
   score                Float    @default(0)
   lat                  Float? // extracted from place names
   lng                  Float?
   bookmarked           Boolean  @default(false)
+  bookmarkedAt         DateTime? // when bookmarked
+  memo                 String? // user memo
   rating               Int      @default(0) // +1 / -1 / 0
   isFallback           Boolean  @default(false) // true if from fallback search
   createdAt            DateTime @default(now())
@@ -43,10 +47,14 @@ model NewsArticle {
   summaryText          String? // legacy: plain text summary
   summaryJson          String? // structured JSON summary (NewsSummary)
   recommendationReason String? // AI-generated recommendation reason
+  reliability          Float    @default(0) // AI-assessed reliability (0-1)
+  reliabilityReason    String? // reason for reliability score
   score                Float    @default(0)
   lat                  Float?
   lng                  Float?
   bookmarked           Boolean  @default(false)
+  bookmarkedAt         DateTime? // when bookmarked
+  memo                 String? // user memo
   rating               Int      @default(0) // +1 / -1 / 0
   isFallback           Boolean  @default(false) // true if from fallback search
   createdAt            DateTime @default(now())
